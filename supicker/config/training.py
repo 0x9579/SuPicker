@@ -35,3 +35,9 @@ class TrainingConfig(Config):
     save_interval: int = 10
     val_interval: int = 1
     loss: LossConfig = field(default_factory=LossConfig)
+    # Distributed training settings
+    distributed: bool = False
+    world_size: int = 1
+    local_rank: int = 0
+    dist_backend: str = "nccl"  # nccl (GPU) or gloo (CPU)
+    sync_bn: bool = True  # Convert BatchNorm to SyncBatchNorm

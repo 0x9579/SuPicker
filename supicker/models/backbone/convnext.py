@@ -1,8 +1,17 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from typing import Optional
 
 from supicker.config import BackboneConfig, ConvNeXtVariant
+
+
+# Pretrained weights URLs from torchvision
+CONVNEXT_PRETRAINED_URLS = {
+    ConvNeXtVariant.TINY: "https://download.pytorch.org/models/convnext_tiny-983f1562.pth",
+    ConvNeXtVariant.SMALL: "https://download.pytorch.org/models/convnext_small-0c510722.pth",
+    ConvNeXtVariant.BASE: "https://download.pytorch.org/models/convnext_base-6075fbad.pth",
+}
 
 
 class LayerNorm2d(nn.Module):
@@ -109,6 +118,133 @@ class ConvNeXt(nn.Module):
             self.downsamples.append(downsample)
 
         self._init_weights()
+
+        # Load pretrained weights if requested
+        if config.pretrained:
+            self._load_pretrained(config.pretrained_path)
+
+    def _load_pretrained(self, pretrained_path: Optional[str] = None) -> None:
+        """Load pretrained weights from URL or local path.
+
+        Args:
+            pretrained_path: Optional local path to weights file.
+                           If None, downloads from PyTorch hub.
+        """
+        if pretrained_path is not None:
+            # Load from local path
+            state_dict = torch.load(pretrained_path, map_location="cpu")
+        else:
+            # Download from PyTorch hub
+            url = CONVNEXT_PRETRAINED_URLS.get(self.config.variant)
+            if url is None:
+                print(f"No pretrained weights available for {self.config.variant}")
+                return
+            state_dict = torch.hub.load_state_dict_from_url(
+                url, map_location="cpu", progress=True
+            )
+
+        # Map pretrained keys to our model keys
+        mapped_state_dict = self._map_pretrained_keys(state_dict)
+
+        # Adapt input channels if needed (RGB -> grayscale)
+        if self.config.in_channels != 3:
+            mapped_state_dict = self._adapt_input_channels(mapped_state_dict)
+
+        # Load with strict=False to handle missing/extra keys
+        missing, unexpected = self.load_state_dict(mapped_state_dict, strict=False)
+
+        if missing:
+            print(f"Missing keys when loading pretrained weights: {missing}")
+        if unexpected:
+            print(f"Unexpected keys when loading pretrained weights: {unexpected}")
+
+    def _adapt_input_channels(self, state_dict: dict) -> dict:
+        """Adapt pretrained RGB weights to grayscale input.
+
+        Converts 3-channel stem weights to 1-channel by averaging.
+
+        Args:
+            state_dict: Pretrained state dict with RGB weights
+
+        Returns:
+            State dict with adapted input channel weights
+        """
+        stem_key = "stem.0.weight"
+        if stem_key in state_dict:
+            rgb_weight = state_dict[stem_key]
+            # Average across RGB channels: (out_ch, 3, H, W) -> (out_ch, 1, H, W)
+            gray_weight = rgb_weight.mean(dim=1, keepdim=True)
+            # Repeat for multi-channel input if needed
+            if self.config.in_channels > 1:
+                gray_weight = gray_weight.repeat(1, self.config.in_channels, 1, 1)
+            state_dict[stem_key] = gray_weight
+
+        return state_dict
+
+    def _map_pretrained_keys(self, state_dict: dict) -> dict:
+        """Map torchvision ConvNeXt keys to SuPicker keys.
+
+        Args:
+            state_dict: Pretrained state dict from torchvision
+
+        Returns:
+            State dict with mapped keys
+        """
+        mapped = {}
+        key_mapping = {
+            # Stem mappings
+            "features.0.0.weight": "stem.0.weight",
+            "features.0.0.bias": "stem.0.bias",
+            "features.0.1.weight": "stem.1.weight",
+            "features.0.1.bias": "stem.1.bias",
+        }
+
+        # Stage and block mappings
+        # torchvision: features.{stage_idx}.{block_idx}.{layer}
+        # Our model: stages.{stage_idx}.{block_idx}.{layer}
+        # Downsample: features.{2,4,6}.{0,1} -> downsamples.{0,1,2}.{0,1}
+        stage_indices = [1, 3, 5, 7]  # torchvision stage indices
+        downsample_indices = [2, 4, 6]  # torchvision downsample indices
+
+        for key, value in state_dict.items():
+            if key in key_mapping:
+                mapped[key_mapping[key]] = value
+                continue
+
+            # Skip classifier head
+            if key.startswith("classifier"):
+                continue
+
+            # Map stage blocks
+            matched = False
+            for our_idx, tv_idx in enumerate(stage_indices):
+                prefix = f"features.{tv_idx}."
+                if key.startswith(prefix):
+                    suffix = key[len(prefix):]
+                    # Map block layer names
+                    suffix = suffix.replace(".block.0.", ".dwconv.")
+                    suffix = suffix.replace(".block.1.", ".norm.")
+                    suffix = suffix.replace(".block.3.", ".pwconv1.")
+                    suffix = suffix.replace(".block.5.", ".pwconv2.")
+                    suffix = suffix.replace(".layer_scale", ".gamma")
+                    new_key = f"stages.{our_idx}.{suffix}"
+                    mapped[new_key] = value
+                    matched = True
+                    break
+
+            if matched:
+                continue
+
+            # Map downsample layers
+            for our_idx, tv_idx in enumerate(downsample_indices):
+                prefix = f"features.{tv_idx}."
+                if key.startswith(prefix):
+                    suffix = key[len(prefix):]
+                    new_key = f"downsamples.{our_idx}.{suffix}"
+                    mapped[new_key] = value
+                    break
+
+        return mapped
 
     def _init_weights(self):
         for m in self.modules():

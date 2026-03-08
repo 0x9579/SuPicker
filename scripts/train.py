@@ -98,6 +98,23 @@ def parse_args():
         "--resume", type=str, default=None, help="Path to checkpoint to resume from"
     )
 
+    # Distributed training arguments
+    parser.add_argument(
+        "--distributed", action="store_true", help="Enable distributed training"
+    )
+    parser.add_argument(
+        "--dist-backend",
+        type=str,
+        default="nccl",
+        choices=["nccl", "gloo"],
+        help="Distributed backend (nccl for GPU, gloo for CPU)",
+    )
+    parser.add_argument(
+        "--no-sync-bn",
+        action="store_true",
+        help="Disable SyncBatchNorm in distributed training",
+    )
+
     return parser.parse_args()
 
 
@@ -131,6 +148,9 @@ def main():
         checkpoint_dir=args.checkpoint_dir,
         log_dir=args.log_dir,
         save_interval=args.save_interval,
+        distributed=args.distributed,
+        dist_backend=args.dist_backend,
+        sync_bn=not args.no_sync_bn,
     )
 
     # Create model
@@ -144,8 +164,14 @@ def main():
         aug_config = AugmentationConfig()
         transforms = build_transforms(aug_config)
 
+    # Determine if we're the main process for printing
+    import os
+    local_rank = int(os.environ.get("LOCAL_RANK", 0))
+    is_main = local_rank == 0
+
     # Create dataloaders
-    print(f"Loading training data from {args.train_images}...")
+    if is_main:
+        print(f"Loading training data from {args.train_images}...")
     train_loader = create_dataloader(
         image_dir=args.train_images,
         star_file=args.train_star,
@@ -154,12 +180,15 @@ def main():
         shuffle=True,
         transforms=transforms,
         num_classes=args.num_classes,
+        distributed=args.distributed,
     )
-    print(f"  Found {len(train_loader.dataset)} training images")
+    if is_main:
+        print(f"  Found {len(train_loader.dataset)} training images")
 
     val_loader = None
     if args.val_images and args.val_star:
-        print(f"Loading validation data from {args.val_images}...")
+        if is_main:
+            print(f"Loading validation data from {args.val_images}...")
         val_loader = create_dataloader(
             image_dir=args.val_images,
             star_file=args.val_star,
@@ -168,8 +197,10 @@ def main():
             shuffle=False,
             transforms=None,  # No augmentation for validation
             num_classes=args.num_classes,
+            distributed=args.distributed,
         )
-        print(f"  Found {len(val_loader.dataset)} validation images")
+        if is_main:
+            print(f"  Found {len(val_loader.dataset)} validation images")
 
     # Create trainer
     trainer = Trainer(
@@ -182,19 +213,24 @@ def main():
 
     # Resume from checkpoint if specified
     if args.resume:
-        print(f"Resuming from checkpoint: {args.resume}")
+        if is_main:
+            print(f"Resuming from checkpoint: {args.resume}")
         trainer.load_checkpoint(args.resume)
 
     # Train
-    print(f"Starting training for {args.epochs} epochs...")
-    print(f"  Device: {args.device}")
-    print(f"  Batch size: {args.batch_size}")
-    print(f"  Learning rate: {args.lr}")
-    print()
+    if is_main:
+        print(f"Starting training for {args.epochs} epochs...")
+        print(f"  Device: {args.device}")
+        print(f"  Batch size: {args.batch_size}")
+        print(f"  Learning rate: {args.lr}")
+        if args.distributed:
+            print(f"  Distributed: True (backend={args.dist_backend})")
+        print()
 
     trainer.train(train_loader, val_loader)
 
-    print("Training complete!")
+    if is_main:
+        print("Training complete!")
 
 
 if __name__ == "__main__":

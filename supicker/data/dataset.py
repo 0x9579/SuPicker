@@ -3,6 +3,7 @@ from typing import Optional, Union
 
 import torch
 from torch.utils.data import Dataset
+from torch.utils.data.distributed import DistributedSampler
 import tifffile
 import numpy as np
 
@@ -114,6 +115,7 @@ class ParticleDataset(Dataset):
             "size": targets["size"],
             "offset": targets["offset"],
             "mask": targets["mask"],
+            "particles": particles,  # Include original particles for evaluation
         }
 
     def _load_image(self, path: Path) -> torch.Tensor:
@@ -149,6 +151,7 @@ def create_dataloader(
     num_workers: int = 4,
     shuffle: bool = True,
     transforms: Optional[Compose] = None,
+    distributed: bool = False,
     **dataset_kwargs,
 ) -> torch.utils.data.DataLoader:
     """Create a DataLoader for training.
@@ -160,6 +163,7 @@ def create_dataloader(
         num_workers: Number of worker processes
         shuffle: Whether to shuffle data
         transforms: Optional transforms
+        distributed: Whether to use DistributedSampler for multi-GPU training
         **dataset_kwargs: Additional arguments for ParticleDataset
 
     Returns:
@@ -172,10 +176,17 @@ def create_dataloader(
         **dataset_kwargs,
     )
 
+    sampler = None
+    if distributed:
+        sampler = DistributedSampler(dataset, shuffle=shuffle)
+        # When using DistributedSampler, shuffle must be False in DataLoader
+        shuffle = False
+
     return torch.utils.data.DataLoader(
         dataset,
         batch_size=batch_size,
-        shuffle=shuffle,
+        shuffle=shuffle if sampler is None else False,
         num_workers=num_workers,
         pin_memory=True,
+        sampler=sampler,
     )
