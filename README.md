@@ -14,6 +14,8 @@ A deep learning framework for particle picking in Cryo-EM micrographs using Cent
 - **Distributed Training**: Multi-GPU support via PyTorch DistributedDataParallel
 - **Pretrained Weights**: Optional ImageNet pretrained backbone weights
 - **Evaluation Metrics**: Precision, Recall, F1, and Average Precision computation
+- **Training Metrics Logging**: Real-time display of precision and recall in training logs
+- **Auto-save on Interrupt**: Safely save training progress when gracefully exiting (Ctrl+C)
 
 ## Installation
 
@@ -104,6 +106,7 @@ python scripts/predict.py \
 | `--pretrained` | `False` | Use ImageNet pretrained weights |
 | `--device` | `cuda` | Device to use (e.g. `cuda:0`, `cuda:7`, `cpu`) |
 | `--distributed` | `False` | Enable multi-GPU training (use with `torchrun`) |
+| `--resume` | `None` | Path to checkpoint file to resume training from |
 | `--no-amp` | `False` | Disable automatic mixed precision |
 | `--no-augmentation` | `False` | Disable data augmentation |
 
@@ -303,6 +306,8 @@ scripts/
 - **AMP**: Enabled by default. Saves 30-50% GPU memory and speeds up training ~1.5x. Disable with `--no-amp` if you encounter numerical issues.
 - **GPU selection**: Use `--device cuda:N` to select a specific GPU, or `CUDA_VISIBLE_DEVICES=N` environment variable.
 - **Multi-GPU**: Always use `torchrun` with `--distributed` flag. Do not combine `--device` with `--distributed`.
+- **Resuming Training**: Use `--resume ./checkpoints/...` to continue training from a checkpoint. If you press `Ctrl+C` during training, SuPicker will automatically save the latest state so you don't lose progress.
+- **Validation Metrics**: When using a validation set, you will see `P` (Precision), `R` (Recall), and `F1` (F1 Score) in the console alongside the loss values.
 
 ## License
 

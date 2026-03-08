@@ -14,6 +14,8 @@
 - **分布式训练**：通过 PyTorch DistributedDataParallel 支持多 GPU 训练
 - **预训练权重**：可选加载 ImageNet 预训练骨干网络权重
 - **评估指标**：内置精确率、召回率、F1 和平均精度（AP）计算
+- **训练日志评估**：训练时同步在控制台显示当前的精确率（P）、召回率（R）和 F1
+- **中断自动保存**：优雅处理 Ctrl+C 退出，自动保存训练进度防止丢失
 
 ## 安装
 
@@ -104,6 +106,7 @@ python scripts/predict.py \
 | `--pretrained` | `False` | 使用 ImageNet 预训练权重 |
 | `--device` | `cuda` | 设备选择（如 `cuda:0`、`cuda:7`、`cpu`） |
 | `--distributed` | `False` | 启用多 GPU 分布式训练（配合 `torchrun` 使用） |
+| `--resume` | `None` | 继续训练的断点文件路径（checkpoint） |
 | `--no-amp` | `False` | 禁用自动混合精度 |
 | `--no-augmentation` | `False` | 禁用数据增强 |
 
@@ -303,6 +306,8 @@ scripts/
 - **混合精度**：默认开启，节省 30-50% 显存并加速约 1.5 倍。如遇数值问题用 `--no-amp` 关闭
 - **GPU 选择**：使用 `--device cuda:N` 指定 GPU，或用环境变量 `CUDA_VISIBLE_DEVICES=N`
 - **多卡训练**：始终使用 `torchrun` 配合 `--distributed` 标志，不要同时使用 `--device`
+- **恢复训练**：使用 `--resume ./checkpoints/...` 继续之前中断的训练。如果在训练时按下 `Ctrl+C`，框架会自动保存当前的进度到 checkpoint。
+- **验证集指标**：如果提供了验证集，训练日志中的 `P`、`R`、`F1` 分别代表 精确率 (Precision)、召回率 (Recall) 和 F1 分数。
 
 ## 许可证
 
