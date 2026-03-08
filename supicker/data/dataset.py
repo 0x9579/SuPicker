@@ -151,6 +151,27 @@ class ParticleDataset(Dataset):
         return torch.from_numpy(image)
 
 
+def particle_collate_fn(batch: list[dict]) -> dict:
+    """Custom collate function that handles variable-length particle lists.
+
+    Tensor fields (image, heatmap, size, offset, mask) are stacked normally.
+    The 'particles' field is kept as a list of lists since each image
+    may have a different number of particles.
+    """
+    collated = {}
+    tensor_keys = ["image", "heatmap", "size", "offset", "mask"]
+
+    for key in tensor_keys:
+        if key in batch[0]:
+            collated[key] = torch.stack([sample[key] for sample in batch])
+
+    # Keep particles as list of lists (variable length per image)
+    if "particles" in batch[0]:
+        collated["particles"] = [sample["particles"] for sample in batch]
+
+    return collated
+
+
 def create_dataloader(
     image_dir: Union[str, Path],
     star_file: Union[str, Path],
@@ -196,4 +217,5 @@ def create_dataloader(
         num_workers=num_workers,
         pin_memory=True,
         sampler=sampler,
+        collate_fn=particle_collate_fn,
     )
