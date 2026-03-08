@@ -466,6 +466,24 @@ class Trainer:
                         scheduler=self.scheduler,
                     )
 
+        except KeyboardInterrupt:
+            # Save checkpoint on Ctrl+C interruption
+            if self.is_main_process:
+                print(f"\nTraining interrupted at epoch {self.current_epoch + 1}. Saving checkpoint...")
+                if self.checkpoint_manager is not None:
+                    try:
+                        save_loss = train_loss
+                    except NameError:
+                        save_loss = float("inf")
+                    self.checkpoint_manager.save(
+                        model=self._get_model_for_saving(),
+                        optimizer=self.optimizer,
+                        epoch=self.current_epoch + 1,
+                        loss=save_loss,
+                        scheduler=self.scheduler,
+                    )
+                    print("Checkpoint saved. You can resume training with --resume.")
+
         finally:
             # Cleanup
             if self.is_main_process and self.logger is not None:
