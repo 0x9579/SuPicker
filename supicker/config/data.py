@@ -18,6 +18,7 @@ class AugmentationConfig(Config):
     contrast_range: tuple[float, float] = (0.8, 1.2)
     gaussian_noise: bool = True
     noise_std: float = 0.02
+    crop_size: int = 1024  # Random crop size; 0 to disable cropping
     ctf_simulation: bool = False
 
 
