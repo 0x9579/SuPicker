@@ -52,7 +52,8 @@ def parse_args():
     )
 
     # Training arguments
-    parser.add_argument("--batch-size", type=int, default=8, help="Batch size")
+    parser.add_argument("--batch-size", type=int, default=8, help="Training batch size")
+    parser.add_argument("--val-batch-size", type=int, default=2, help="Validation batch size (default: 2, smaller to save memory)")
     parser.add_argument("--epochs", type=int, default=100, help="Number of epochs")
     parser.add_argument("--lr", type=float, default=1e-4, help="Learning rate")
     parser.add_argument(
@@ -232,7 +233,7 @@ def main():
         val_loader = create_dataloader(
             image_dir=args.val_images,
             star_file=args.val_star,
-            batch_size=args.batch_size,
+            batch_size=args.val_batch_size,
             num_workers=args.num_workers,
             shuffle=False,
             transforms=val_transforms,
