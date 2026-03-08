@@ -74,6 +74,7 @@ def parse_args():
 
     # Augmentation arguments
     parser.add_argument("--no-augmentation", action="store_true", help="Disable augmentation")
+    parser.add_argument("--no-amp", action="store_true", help="Disable automatic mixed precision (AMP)")
 
     # Output arguments
     parser.add_argument(
@@ -151,6 +152,7 @@ def main():
         distributed=args.distributed,
         dist_backend=args.dist_backend,
         sync_bn=not args.no_sync_bn,
+        use_amp=not args.no_amp,
     )
 
     # Create model

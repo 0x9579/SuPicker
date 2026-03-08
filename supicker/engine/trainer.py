@@ -84,6 +84,12 @@ class Trainer:
         self.current_epoch = 0
         self.best_loss = float("inf")
 
+        # AMP (Automatic Mixed Precision)
+        self.use_amp = config.use_amp and "cuda" in self.device
+        self.scaler = torch.amp.GradScaler(enabled=self.use_amp)
+        if self.is_main_process and self.use_amp:
+            print("  Mixed precision (AMP): enabled")
+
     @property
     def is_main_process(self) -> bool:
         """Check if this is the main process (rank 0)."""
@@ -208,16 +214,16 @@ class Trainer:
             "mask": batch["mask"].to(self.device),
         }
 
-        # Forward pass
+        # Forward pass with AMP
         self.optimizer.zero_grad()
-        outputs = self.model(image)
+        with torch.amp.autocast(device_type="cuda", enabled=self.use_amp):
+            outputs = self.model(image)
+            loss, loss_dict = self.criterion(outputs, targets)
 
-        # Compute loss
-        loss, loss_dict = self.criterion(outputs, targets)
-
-        # Backward pass
-        loss.backward()
-        self.optimizer.step()
+        # Backward pass with GradScaler
+        self.scaler.scale(loss).backward()
+        self.scaler.step(self.optimizer)
+        self.scaler.update()
 
         return loss, loss_dict
 
@@ -256,9 +262,10 @@ class Trainer:
                     "mask": batch["mask"].to(self.device),
                 }
 
-                # Forward pass
-                outputs = self.model(image)
-                loss, _ = self.criterion(outputs, targets)
+                # Forward pass with AMP
+                with torch.amp.autocast(device_type="cuda", enabled=self.use_amp):
+                    outputs = self.model(image)
+                    loss, _ = self.criterion(outputs, targets)
 
                 total_loss += loss.item()
                 num_batches += 1
