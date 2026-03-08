@@ -179,8 +179,13 @@ def main():
             world_size = int(os.environ.get("WORLD_SIZE", 1))
             rank = int(os.environ.get("RANK", 0))
 
+            backend = args.dist_backend
+            if backend == "nccl" and not torch.cuda.is_available():
+                print("Warning: CUDA is not available. Switching distributed backend to 'gloo'.")
+                backend = "gloo"
+
             dist.init_process_group(
-                backend=args.dist_backend,
+                backend=backend,
                 init_method="env://",
                 world_size=world_size,
                 rank=rank,

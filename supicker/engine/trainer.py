@@ -95,13 +95,16 @@ class Trainer:
             if "MASTER_PORT" not in os.environ:
                 os.environ["MASTER_PORT"] = "29500"
 
-            # Get rank and world size from environment (set by torchrun)
             self.local_rank = int(os.environ.get("LOCAL_RANK", self.config.local_rank))
             self.world_size = int(os.environ.get("WORLD_SIZE", self.config.world_size))
             rank = int(os.environ.get("RANK", self.local_rank))
 
+            backend = self.config.dist_backend
+            if backend == "nccl" and not torch.cuda.is_available():
+                backend = "gloo"
+
             dist.init_process_group(
-                backend=self.config.dist_backend,
+                backend=backend,
                 init_method="env://",
                 world_size=self.world_size,
                 rank=rank,
