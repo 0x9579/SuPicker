@@ -218,13 +218,24 @@ def main():
     if args.val_images and args.val_star:
         if is_main:
             print(f"Loading validation data from {args.val_images}...")
+        # Validation: no augmentation, but still need crop + normalize for memory
+        val_aug_config = AugmentationConfig(
+            horizontal_flip=False,
+            vertical_flip=False,
+            rotation_90=False,
+            random_rotation=False,
+            brightness=False,
+            contrast=False,
+            gaussian_noise=False,
+        )
+        val_transforms = build_transforms(val_aug_config)
         val_loader = create_dataloader(
             image_dir=args.val_images,
             star_file=args.val_star,
             batch_size=args.batch_size,
             num_workers=args.num_workers,
             shuffle=False,
-            transforms=None,  # No augmentation for validation
+            transforms=val_transforms,
             num_classes=args.num_classes,
             distributed=args.distributed,
         )
