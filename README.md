@@ -8,6 +8,8 @@ A deep learning framework for particle picking in Cryo-EM micrographs using Cent
 - **Feature Pyramid Network**: Multi-scale feature extraction for detecting particles of varying sizes
 - **CenterNet Detection Head**: Anchor-free detection with heatmap, size, and offset predictions
 - **Flexible Data Pipeline**: Support for TIFF, MRC, and standard image formats with STAR file annotations
+- **RandomCrop Training**: Automatic random cropping for training on large micrographs without OOM
+- **AMP (Mixed Precision)**: Automatic mixed precision training for 30-50% memory savings and faster training
 - **Configurable Training**: Modular configuration system for all training hyperparameters
 - **Distributed Training**: Multi-GPU support via PyTorch DistributedDataParallel
 - **Pretrained Weights**: Optional ImageNet pretrained backbone weights
@@ -43,6 +45,15 @@ python scripts/train.py \
     --epochs 100 \
     --batch-size 8
 
+# Training on a specific GPU
+python scripts/train.py \
+    --train-images ./data/micrographs \
+    --train-star ./data/particles.star \
+    --backbone tiny \
+    --epochs 100 \
+    --batch-size 8 \
+    --device cuda:7
+
 # Training with validation
 python scripts/train.py \
     --train-images ./data/train \
@@ -53,6 +64,12 @@ python scripts/train.py \
 
 # Multi-GPU training (4 GPUs)
 torchrun --nproc_per_node=4 scripts/train.py \
+    --train-images ./data/micrographs \
+    --train-star ./data/particles.star \
+    --distributed
+
+# Specific GPUs only
+CUDA_VISIBLE_DEVICES=0,2 torchrun --nproc_per_node=2 scripts/train.py \
     --train-images ./data/micrographs \
     --train-star ./data/particles.star \
     --distributed
@@ -77,6 +94,7 @@ python scripts/predict.py \
 |-----------|---------|-------------|
 | `--backbone` | `tiny` | ConvNeXt variant: tiny, small, base |
 | `--batch-size` | `8` | Training batch size |
+| `--val-batch-size` | `2` | Validation batch size (smaller to save memory) |
 | `--epochs` | `100` | Number of training epochs |
 | `--lr` | `1e-4` | Learning rate |
 | `--optimizer` | `adamw` | Optimizer: adam, adamw, sgd |
@@ -84,7 +102,10 @@ python scripts/predict.py \
 | `--weight-decay` | `0.01` | Weight decay for regularization |
 | `--warmup-epochs` | `5` | Linear warmup epochs |
 | `--pretrained` | `False` | Use ImageNet pretrained weights |
-| `--distributed` | `False` | Enable multi-GPU training |
+| `--device` | `cuda` | Device to use (e.g. `cuda:0`, `cuda:7`, `cpu`) |
+| `--distributed` | `False` | Enable multi-GPU training (use with `torchrun`) |
+| `--no-amp` | `False` | Disable automatic mixed precision |
+| `--no-augmentation` | `False` | Disable data augmentation |
 
 ### Inference Parameters
 
@@ -233,6 +254,28 @@ micrograph_001.tiff,100.5,200.3,0.95,64,64
 micrograph_001.tiff,150.2,300.1,0.88,64,64
 ```
 
+## Data Tools
+
+SuPicker includes a STAR file tool for data inspection and splitting:
+
+```bash
+# Show STAR file statistics
+python scripts/star_tool.py info particles.star
+
+# List all micrographs
+python scripts/star_tool.py info particles.star --list
+
+# Extract first/last N images
+python scripts/star_tool.py split particles.star -n 10 -o subset.star
+python scripts/star_tool.py split particles.star -n 50 --from-end -o val.star
+
+# Split into train/val sets (with optional shuffle)
+python scripts/star_tool.py split-trainval particles.star \
+    --val-images 50 \
+    --train-output train.star --val-output val.star \
+    --shuffle --seed 42
+```
+
 ## Project Structure
 
 ```
@@ -246,7 +289,20 @@ supicker/
 │   ├── fpn/         # Feature Pyramid Network
 │   └── head/        # CenterNet detection head
 └── utils/           # Utilities (logging, export, metrics)
+scripts/
+├── train.py         # Training script
+├── predict.py       # Inference script
+└── star_tool.py     # STAR file inspection & splitting
 ```
+
+## Training Tips
+
+- **Batch size**: Use 8-20 for stable training. Larger batches smooth gradients and reduce loss oscillation.
+- **Learning rate**: Scale with batch size. `1e-4` for batch_size=8, `2e-4` for batch_size=16+.
+- **Crop size**: Default 1024×1024. Images are randomly cropped during training to fit in GPU memory. Adjust via `AugmentationConfig.crop_size`.
+- **AMP**: Enabled by default. Saves 30-50% GPU memory and speeds up training ~1.5x. Disable with `--no-amp` if you encounter numerical issues.
+- **GPU selection**: Use `--device cuda:N` to select a specific GPU, or `CUDA_VISIBLE_DEVICES=N` environment variable.
+- **Multi-GPU**: Always use `torchrun` with `--distributed` flag. Do not combine `--device` with `--distributed`.
 
 ## License
 

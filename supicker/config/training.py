@@ -41,3 +41,4 @@ class TrainingConfig(Config):
     local_rank: int = 0
     dist_backend: str = "nccl"  # nccl (GPU) or gloo (CPU)
     sync_bn: bool = True  # Convert BatchNorm to SyncBatchNorm
+    use_amp: bool = True  # Use automatic mixed precision (FP16) to save memory

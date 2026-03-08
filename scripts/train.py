@@ -52,7 +52,8 @@ def parse_args():
     )
 
     # Training arguments
-    parser.add_argument("--batch-size", type=int, default=8, help="Batch size")
+    parser.add_argument("--batch-size", type=int, default=8, help="Training batch size")
+    parser.add_argument("--val-batch-size", type=int, default=2, help="Validation batch size (default: 2, smaller to save memory)")
     parser.add_argument("--epochs", type=int, default=100, help="Number of epochs")
     parser.add_argument("--lr", type=float, default=1e-4, help="Learning rate")
     parser.add_argument(
@@ -74,6 +75,7 @@ def parse_args():
 
     # Augmentation arguments
     parser.add_argument("--no-augmentation", action="store_true", help="Disable augmentation")
+    parser.add_argument("--no-amp", action="store_true", help="Disable automatic mixed precision (AMP)")
 
     # Output arguments
     parser.add_argument(
@@ -151,6 +153,7 @@ def main():
         distributed=args.distributed,
         dist_backend=args.dist_backend,
         sync_bn=not args.no_sync_bn,
+        use_amp=not args.no_amp,
     )
 
     # Create model
@@ -216,13 +219,24 @@ def main():
     if args.val_images and args.val_star:
         if is_main:
             print(f"Loading validation data from {args.val_images}...")
+        # Validation: no augmentation, but still need crop + normalize for memory
+        val_aug_config = AugmentationConfig(
+            horizontal_flip=False,
+            vertical_flip=False,
+            rotation_90=False,
+            random_rotation=False,
+            brightness=False,
+            contrast=False,
+            gaussian_noise=False,
+        )
+        val_transforms = build_transforms(val_aug_config)
         val_loader = create_dataloader(
             image_dir=args.val_images,
             star_file=args.val_star,
-            batch_size=args.batch_size,
+            batch_size=args.val_batch_size,
             num_workers=args.num_workers,
             shuffle=False,
-            transforms=None,  # No augmentation for validation
+            transforms=val_transforms,
             num_classes=args.num_classes,
             distributed=args.distributed,
         )

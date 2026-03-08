@@ -8,6 +8,8 @@
 - **特征金字塔网络（FPN）**：多尺度特征提取，适用于检测不同大小的颗粒
 - **CenterNet 检测头**：无锚框检测，输出热力图、尺寸和偏移预测
 - **灵活的数据管道**：支持 TIFF、MRC 及标准图像格式，使用 STAR 文件标注
+- **随机裁剪训练**：自动随机裁剪大尺寸显微图像，避免显存不足（OOM）
+- **混合精度训练（AMP）**：自动混合精度，节省 30-50% 显存并加速训练
 - **可配置训练**：模块化配置系统，覆盖所有训练超参数
 - **分布式训练**：通过 PyTorch DistributedDataParallel 支持多 GPU 训练
 - **预训练权重**：可选加载 ImageNet 预训练骨干网络权重
@@ -43,6 +45,15 @@ python scripts/train.py \
     --epochs 100 \
     --batch-size 8
 
+# 指定 GPU 训练
+python scripts/train.py \
+    --train-images ./data/micrographs \
+    --train-star ./data/particles.star \
+    --backbone tiny \
+    --epochs 100 \
+    --batch-size 8 \
+    --device cuda:7
+
 # 带验证集训练
 python scripts/train.py \
     --train-images ./data/train \
@@ -53,6 +64,12 @@ python scripts/train.py \
 
 # 多 GPU 训练（4 卡）
 torchrun --nproc_per_node=4 scripts/train.py \
+    --train-images ./data/micrographs \
+    --train-star ./data/particles.star \
+    --distributed
+
+# 指定特定 GPU
+CUDA_VISIBLE_DEVICES=0,2 torchrun --nproc_per_node=2 scripts/train.py \
     --train-images ./data/micrographs \
     --train-star ./data/particles.star \
     --distributed
@@ -77,6 +94,7 @@ python scripts/predict.py \
 |------|--------|------|
 | `--backbone` | `tiny` | ConvNeXt 变体：tiny、small、base |
 | `--batch-size` | `8` | 训练批次大小 |
+| `--val-batch-size` | `2` | 验证批次大小（默认较小以节省显存） |
 | `--epochs` | `100` | 训练轮数 |
 | `--lr` | `1e-4` | 学习率 |
 | `--optimizer` | `adamw` | 优化器：adam、adamw、sgd |
@@ -84,7 +102,10 @@ python scripts/predict.py \
 | `--weight-decay` | `0.01` | 权重衰减（正则化） |
 | `--warmup-epochs` | `5` | 线性预热轮数 |
 | `--pretrained` | `False` | 使用 ImageNet 预训练权重 |
-| `--distributed` | `False` | 启用多 GPU 分布式训练 |
+| `--device` | `cuda` | 设备选择（如 `cuda:0`、`cuda:7`、`cpu`） |
+| `--distributed` | `False` | 启用多 GPU 分布式训练（配合 `torchrun` 使用） |
+| `--no-amp` | `False` | 禁用自动混合精度 |
+| `--no-augmentation` | `False` | 禁用数据增强 |
 
 ### 推理参数
 
@@ -233,6 +254,28 @@ micrograph_001.tiff,100.5,200.3,0.95,64,64
 micrograph_001.tiff,150.2,300.1,0.88,64,64
 ```
 
+## 数据工具
+
+SuPicker 内置了 STAR 文件检查和拆分工具：
+
+```bash
+# 查看 STAR 文件统计信息
+python scripts/star_tool.py info particles.star
+
+# 列出所有 micrograph
+python scripts/star_tool.py info particles.star --list
+
+# 提取前/后 N 张图像
+python scripts/star_tool.py split particles.star -n 10 -o subset.star
+python scripts/star_tool.py split particles.star -n 50 --from-end -o val.star
+
+# 一键拆分训练/验证集（可随机打乱）
+python scripts/star_tool.py split-trainval particles.star \
+    --val-images 50 \
+    --train-output train.star --val-output val.star \
+    --shuffle --seed 42
+```
+
 ## 项目结构
 
 ```
@@ -246,7 +289,20 @@ supicker/
 │   ├── fpn/         # 特征金字塔网络
 │   └── head/        # CenterNet 检测头
 └── utils/           # 工具类（日志、导出、评估指标）
+scripts/
+├── train.py         # 训练脚本
+├── predict.py       # 推理脚本
+└── star_tool.py     # STAR 文件检查与拆分工具
 ```
+
+## 训练建议
+
+- **批次大小**：建议 8-20，越大梯度越稳定，但受显存限制
+- **学习率**：随 batch size 等比缩放。`batch_size=8` 用 `1e-4`，`batch_size=16+` 用 `2e-4`
+- **裁剪尺寸**：默认 1024×1024，训练时自动随机裁剪以适应显存，可通过 `AugmentationConfig.crop_size` 调整
+- **混合精度**：默认开启，节省 30-50% 显存并加速约 1.5 倍。如遇数值问题用 `--no-amp` 关闭
+- **GPU 选择**：使用 `--device cuda:N` 指定 GPU，或用环境变量 `CUDA_VISIBLE_DEVICES=N`
+- **多卡训练**：始终使用 `torchrun` 配合 `--distributed` 标志，不要同时使用 `--device`
 
 ## 许可证
 

@@ -90,7 +90,6 @@ class ParticleDataset(Dataset):
 
         # Load image
         image = self._load_image(image_path)
-        h, w = image.shape[-2], image.shape[-1]
 
         # Get particles for this image
         particles = self.particles_by_micrograph[image_name]
@@ -109,9 +108,12 @@ class ParticleDataset(Dataset):
             elif p.get("class_id", 0) >= self.num_classes:
                 p["class_id"] = 0 # Default to first class if out of bounds
 
-        # Apply transforms
+        # Apply transforms (including crop, flip, rotate, etc.)
         if self.transforms is not None:
             image, particles = self.transforms(image, particles)
+
+        # Get image size AFTER transforms (crop may have changed it)
+        h, w = image.shape[-2], image.shape[-1]
 
         # Generate targets
         targets = self.target_generator(particles, image_size=(h, w))

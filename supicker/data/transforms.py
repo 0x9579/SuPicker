@@ -175,6 +175,46 @@ class BrightnessContrast(BaseTransform):
         return image, particles
 
 
+class RandomCrop(BaseTransform):
+    """Randomly crop a patch from the image and filter particles.
+
+    Essential for training on large cryo-EM micrographs that don't fit
+    in GPU memory at full resolution.
+    """
+
+    def __init__(self, crop_size: int = 1024, p: float = 1.0):
+        super().__init__(p)
+        self.crop_size = crop_size
+
+    def apply(
+        self, image: torch.Tensor, particles: list[dict]
+    ) -> tuple[torch.Tensor, list[dict]]:
+        _, h, w = image.shape
+        crop_h = min(self.crop_size, h)
+        crop_w = min(self.crop_size, w)
+
+        # Random top-left corner
+        top = random.randint(0, h - crop_h)
+        left = random.randint(0, w - crop_w)
+
+        # Crop image
+        image = image[:, top:top + crop_h, left:left + crop_w]
+
+        # Filter and adjust particles
+        cropped_particles = []
+        for p in particles:
+            new_x = p["x"] - left
+            new_y = p["y"] - top
+            # Keep particle only if its center is inside the crop
+            if 0 <= new_x < crop_w and 0 <= new_y < crop_h:
+                new_p = p.copy()
+                new_p["x"] = new_x
+                new_p["y"] = new_y
+                cropped_particles.append(new_p)
+
+        return image, cropped_particles
+
+
 class Normalize(BaseTransform):
     """Normalize image to zero mean and unit variance."""
 
@@ -215,6 +255,11 @@ def build_transforms(config) -> Compose:
         Composed transforms
     """
     transforms = []
+
+    # Crop first to reduce memory usage before other transforms
+    crop_size = getattr(config, 'crop_size', 1024)
+    if crop_size > 0:
+        transforms.append(RandomCrop(crop_size=crop_size, p=1.0))
 
     if config.horizontal_flip:
         transforms.append(HorizontalFlip(p=0.5))
