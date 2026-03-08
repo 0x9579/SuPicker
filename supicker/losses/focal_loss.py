@@ -23,8 +23,12 @@ class FocalLoss(nn.Module):
         Returns:
             Scalar loss value
         """
+        # Cast to float32 for numerical stability (critical for AMP/FP16)
+        pred = pred.float()
+        target = target.float()
+
         # Clamp predictions to avoid log(0)
-        pred = torch.clamp(pred, min=1e-6, max=1 - 1e-6)
+        pred = torch.clamp(pred, min=1e-4, max=1 - 1e-4)
 
         # Positive samples (target == 1)
         pos_mask = target.eq(1).float()
@@ -38,11 +42,8 @@ class FocalLoss(nn.Module):
         neg_loss = -neg_weight * torch.pow(pred, self.alpha) * torch.log(1 - pred) * neg_mask
 
         # Normalize by number of positive samples
-        num_pos = pos_mask.sum()
-        if num_pos == 0:
-            loss = neg_loss.sum()
-        else:
-            loss = (pos_loss.sum() + neg_loss.sum()) / num_pos
+        num_pos = pos_mask.sum().clamp(min=1)
+        loss = (pos_loss.sum() + neg_loss.sum()) / num_pos
 
         return loss
 
@@ -57,7 +58,11 @@ class GaussianFocalLoss(nn.Module):
 
     def forward(self, pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
         """Compute Gaussian focal loss."""
-        pred = torch.clamp(pred, min=1e-6, max=1 - 1e-6)
+        # Cast to float32 for numerical stability (critical for AMP/FP16)
+        pred = pred.float()
+        target = target.float()
+
+        pred = torch.clamp(pred, min=1e-4, max=1 - 1e-4)
 
         pos_mask = target.ge(0.99).float()
         neg_mask = target.lt(0.99).float()
@@ -66,10 +71,7 @@ class GaussianFocalLoss(nn.Module):
         neg_weight = torch.pow(1 - target, self.beta)
         neg_loss = -neg_weight * torch.pow(pred, self.alpha) * torch.log(1 - pred) * neg_mask
 
-        num_pos = pos_mask.sum()
-        if num_pos == 0:
-            loss = neg_loss.sum()
-        else:
-            loss = (pos_loss.sum() + neg_loss.sum()) / num_pos
+        num_pos = pos_mask.sum().clamp(min=1)
+        loss = (pos_loss.sum() + neg_loss.sum()) / num_pos
 
         return loss

@@ -21,11 +21,9 @@ class RegL1Loss(nn.Module):
         # Expand mask to match prediction channels
         mask = mask.unsqueeze(1).expand_as(pred)
 
-        loss = torch.abs(pred - target) * mask
-        num_pos = mask.sum()
-
-        if num_pos == 0:
-            return loss.sum()
+        # Cast to float32 for AMP stability
+        loss = torch.abs(pred.float() - target.float()) * mask.float()
+        num_pos = mask.sum().clamp(min=1)
         return loss.sum() / num_pos
 
 
@@ -50,6 +48,12 @@ class SmoothL1Loss(nn.Module):
             Scalar loss value
         """
         mask = mask.unsqueeze(1).expand_as(pred)
+
+        # Cast to float32 for AMP stability
+        pred = pred.float()
+        target = target.float()
+        mask = mask.float()
+
         diff = torch.abs(pred - target)
 
         # Smooth L1 formula
@@ -60,7 +64,5 @@ class SmoothL1Loss(nn.Module):
         )
         loss = loss * mask
 
-        num_pos = mask.sum()
-        if num_pos == 0:
-            return loss.sum()
+        num_pos = mask.sum().clamp(min=1)
         return loss.sum() / num_pos
