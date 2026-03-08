@@ -510,7 +510,7 @@ class Trainer:
                     self.checkpoint_manager.save(
                         model=self._get_model_for_saving(),
                         optimizer=self.optimizer,
-                        epoch=self.current_epoch + 1,
+                        epoch=self.current_epoch,  # Save the current, incomplete epoch so it gets restarted
                         loss=save_loss,
                         scheduler=self.scheduler,
                     )
