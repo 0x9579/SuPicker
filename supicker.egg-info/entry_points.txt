@@ -1,0 +1,3 @@
+[console_scripts]
+supicker-predict = scripts.predict:main
+supicker-train = scripts.train:main

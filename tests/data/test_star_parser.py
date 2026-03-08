@@ -23,7 +23,7 @@ def test_parse_star_cryosparc_format():
     from supicker.data.star_parser import parse_star_file
 
     # cryoSPARC uses different column names
-    star_content = """data_
+    star_content = """data_particles
 
 loop_
 _rlnMicrographName

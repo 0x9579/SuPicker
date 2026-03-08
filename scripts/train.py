@@ -166,6 +166,28 @@ def main():
 
     # Determine if we're the main process for printing
     import os
+    if args.distributed:
+        import torch.distributed as dist
+        if not dist.is_initialized():
+            # Set defaults for single-node if not set (helps when not using torchrun)
+            if "MASTER_ADDR" not in os.environ:
+                os.environ["MASTER_ADDR"] = "localhost"
+            if "MASTER_PORT" not in os.environ:
+                os.environ["MASTER_PORT"] = "29500"
+
+            local_rank = int(os.environ.get("LOCAL_RANK", 0))
+            world_size = int(os.environ.get("WORLD_SIZE", 1))
+            rank = int(os.environ.get("RANK", 0))
+
+            dist.init_process_group(
+                backend=args.dist_backend,
+                init_method="env://",
+                world_size=world_size,
+                rank=rank,
+            )
+            if torch.cuda.is_available():
+                torch.cuda.set_device(local_rank)
+
     local_rank = int(os.environ.get("LOCAL_RANK", 0))
     is_main = local_rank == 0
 

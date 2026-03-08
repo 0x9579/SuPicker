@@ -22,12 +22,16 @@ def parse_star_file(star_path: Union[str, Path]) -> dict[str, list[dict]]:
 
     # Find column indices
     column_indices = {}
+    in_data_particles = False
     in_loop = False
     data_start = 0
 
     for i, line in enumerate(lines):
         line = line.strip()
-        if line.startswith("loop_"):
+        if line == "data_particles":
+            in_data_particles = True
+            continue
+        if in_data_particles and line.startswith("loop_"):
             in_loop = True
             continue
         if in_loop and line.startswith("_"):

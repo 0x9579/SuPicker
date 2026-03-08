@@ -89,17 +89,27 @@ class Trainer:
     def _setup_distributed(self) -> None:
         """Initialize distributed training process group."""
         if not dist.is_initialized():
+            # Set defaults for single-node if not set
+            if "MASTER_ADDR" not in os.environ:
+                os.environ["MASTER_ADDR"] = "localhost"
+            if "MASTER_PORT" not in os.environ:
+                os.environ["MASTER_PORT"] = "29500"
+
             # Get rank and world size from environment (set by torchrun)
             self.local_rank = int(os.environ.get("LOCAL_RANK", self.config.local_rank))
             self.world_size = int(os.environ.get("WORLD_SIZE", self.config.world_size))
+            rank = int(os.environ.get("RANK", self.local_rank))
 
             dist.init_process_group(
                 backend=self.config.dist_backend,
                 init_method="env://",
+                world_size=self.world_size,
+                rank=rank,
             )
 
             # Set device for this process
-            torch.cuda.set_device(self.local_rank)
+            if torch.cuda.is_available():
+                torch.cuda.set_device(self.local_rank)
 
     def _reduce_value(self, value: torch.Tensor, average: bool = True) -> torch.Tensor:
         """Reduce a value across all processes.

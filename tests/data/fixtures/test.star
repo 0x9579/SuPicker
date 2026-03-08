@@ -1,4 +1,4 @@
-data_
+data_particles
 
 loop_
 _rlnMicrographName
