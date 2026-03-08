@@ -74,7 +74,8 @@ def parse_star_file(star_path: Union[str, Path]) -> dict[str, list[dict]]:
         if len(parts) < len(column_indices):
             continue
 
-        micrograph = Path(parts[mic_col]).name
+        # micrograph = Path(parts[mic_col]).name
+        micrograph = parts[mic_col]
         x = float(parts[x_col])
         y = float(parts[y_col])
         class_id = int(parts[class_col]) - 1 if class_col is not None else 0

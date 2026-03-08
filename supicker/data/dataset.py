@@ -95,12 +95,19 @@ class ParticleDataset(Dataset):
         # Get particles for this image
         particles = self.particles_by_micrograph[image_name]
 
-        # Add default size if not present
+        # Add default size and normalize class_id
         for p in particles:
             if "width" not in p:
                 p["width"] = self.default_particle_size
             if "height" not in p:
                 p["height"] = self.default_particle_size
+            
+            # If we only want one class, force all particles to class 0
+            if self.num_classes == 1:
+                p["class_id"] = 0
+            # Otherwise ensure class_id is within bounds
+            elif p.get("class_id", 0) >= self.num_classes:
+                p["class_id"] = 0 # Default to first class if out of bounds
 
         # Apply transforms
         if self.transforms is not None:
