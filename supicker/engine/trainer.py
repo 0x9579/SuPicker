@@ -304,12 +304,14 @@ class Trainer:
         self,
         outputs: dict[str, torch.Tensor],
         score_threshold: float = 0.3,
+        max_per_image: int = 500,
     ) -> list[dict]:
         """Extract particle predictions from model outputs.
 
         Args:
             outputs: Model outputs with 'heatmap', 'size', 'offset' keys
             score_threshold: Minimum score threshold
+            max_per_image: Maximum number of particles to extract per image
 
         Returns:
             List of particle dictionaries with x, y, score keys
@@ -321,34 +323,57 @@ class Trainer:
 
         # Find local maxima using max pooling
         hmax = F.max_pool2d(heatmap, kernel_size=3, stride=1, padding=1)
-        keep = (heatmap == hmax) & (heatmap >= score_threshold)
+        keep = (heatmap == hmax).float()
+        heatmap = heatmap * keep  # Zero out non-maxima
 
         particles = []
         output_stride = 4  # Default output stride
 
         for b in range(batch_size):
-            for c in range(num_classes):
-                y_coords, x_coords = torch.where(keep[b, c])
-                for y, x in zip(y_coords.tolist(), x_coords.tolist()):
-                    score = float(heatmap[b, c, y, x])
+            # Flatten heatmap for this image: [num_classes * h * w]
+            hm_flat = heatmap[b].view(-1)
+            
+            # Get top K to prevent Hungarian matching from hanging on thousands of false positives
+            K = min(max_per_image, hm_flat.shape[0])
+            topk_scores, topk_inds = torch.topk(hm_flat, K)
+            
+            # Filter by score_threshold
+            valid_mask = topk_scores >= score_threshold
+            topk_scores = topk_scores[valid_mask]
+            topk_inds = topk_inds[valid_mask]
+            
+            if len(topk_scores) == 0:
+                continue
+                
+            # Convert flat indices back to class, y, x
+            classes = topk_inds // (h * w)
+            topk_inds = topk_inds % (h * w)
+            ys = topk_inds // w
+            xs = topk_inds % w
 
-                    # Get offset if available
-                    offset_x, offset_y = 0.0, 0.0
-                    if "offset" in outputs and outputs["offset"] is not None:
-                        offset_x = float(outputs["offset"][b, 0, y, x])
-                        offset_y = float(outputs["offset"][b, 1, y, x])
+            for idx in range(len(topk_scores)):
+                score = float(topk_scores[idx])
+                c = int(classes[idx])
+                y = int(ys[idx])
+                x = int(xs[idx])
 
-                    # Convert to image coordinates
-                    img_x = (x + offset_x) * output_stride
-                    img_y = (y + offset_y) * output_stride
+                # Get offset if available
+                offset_x, offset_y = 0.0, 0.0
+                if "offset" in outputs and outputs["offset"] is not None:
+                    offset_x = float(outputs["offset"][b, 0, y, x])
+                    offset_y = float(outputs["offset"][b, 1, y, x])
 
-                    particles.append({
-                        "x": img_x,
-                        "y": img_y,
-                        "score": score,
-                        "class_id": c,
-                        "batch_idx": b,
-                    })
+                # Convert to image coordinates
+                img_x = (x + offset_x) * output_stride
+                img_y = (y + offset_y) * output_stride
+
+                particles.append({
+                    "x": img_x,
+                    "y": img_y,
+                    "score": score,
+                    "class_id": c,
+                    "batch_idx": b,
+                })
 
         return particles
 
