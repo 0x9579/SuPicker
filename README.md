@@ -94,6 +94,7 @@ python scripts/predict.py \
 |-----------|---------|-------------|
 | `--backbone` | `tiny` | ConvNeXt variant: tiny, small, base |
 | `--batch-size` | `8` | Training batch size |
+| `--val-batch-size` | `2` | Validation batch size (smaller to save memory) |
 | `--epochs` | `100` | Number of training epochs |
 | `--lr` | `1e-4` | Learning rate |
 | `--optimizer` | `adamw` | Optimizer: adam, adamw, sgd |
@@ -253,6 +254,28 @@ micrograph_001.tiff,100.5,200.3,0.95,64,64
 micrograph_001.tiff,150.2,300.1,0.88,64,64
 ```
 
+## Data Tools
+
+SuPicker includes a STAR file tool for data inspection and splitting:
+
+```bash
+# Show STAR file statistics
+python scripts/star_tool.py info particles.star
+
+# List all micrographs
+python scripts/star_tool.py info particles.star --list
+
+# Extract first/last N images
+python scripts/star_tool.py split particles.star -n 10 -o subset.star
+python scripts/star_tool.py split particles.star -n 50 --from-end -o val.star
+
+# Split into train/val sets (with optional shuffle)
+python scripts/star_tool.py split-trainval particles.star \
+    --val-images 50 \
+    --train-output train.star --val-output val.star \
+    --shuffle --seed 42
+```
+
 ## Project Structure
 
 ```
@@ -266,6 +289,10 @@ supicker/
 │   ├── fpn/         # Feature Pyramid Network
 │   └── head/        # CenterNet detection head
 └── utils/           # Utilities (logging, export, metrics)
+scripts/
+├── train.py         # Training script
+├── predict.py       # Inference script
+└── star_tool.py     # STAR file inspection & splitting
 ```
 
 ## Training Tips
