@@ -38,6 +38,14 @@ class TargetGenerator:
             cy = p["y"] / self.output_stride
             class_id = p.get("class_id", 0)
 
+            # Skip particles outside the output map
+            if cx < 0 or cx >= out_w or cy < 0 or cy >= out_h:
+                continue
+
+            # Ensure class_id is within bounds
+            if class_id < 0 or class_id >= self.num_classes:
+                continue
+
             # Determine Gaussian radius based on particle size or default
             width = p.get("width", 64) / self.output_stride
             height = p.get("height", 64) / self.output_stride
@@ -62,6 +70,10 @@ class TargetGenerator:
         right = min(width - cx_int, radius + 1)
         top = min(cy_int, radius)
         bottom = min(height - cy_int, radius + 1)
+
+        # Skip if the Gaussian range is empty
+        if left + right <= 0 or top + bottom <= 0:
+            return
 
         # Create Gaussian kernel
         sigma = self.gaussian_sigma
