@@ -287,7 +287,7 @@ class Trainer:
         avg_loss = total_loss / max(num_batches, 1)
 
         if compute_metrics and metric_aggregator is not None:
-            metrics = metric_aggregator.compute_aggregate()
+            metrics = metric_aggregator.compute_aggregate(compute_ap=False)
             metrics_dict = {
                 "precision": metrics.precision,
                 "recall": metrics.recall,
