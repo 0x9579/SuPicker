@@ -44,8 +44,11 @@ class Trainer:
 
         if self.is_distributed:
             self._setup_distributed()
-            # Update device based on local_rank
-            self.device = f"cuda:{self.local_rank}"
+            # Only override device with LOCAL_RANK when launched via torchrun
+            # (i.e. LOCAL_RANK is explicitly set in the environment).
+            # Otherwise, respect the user's --device argument.
+            if "LOCAL_RANK" in os.environ:
+                self.device = f"cuda:{self.local_rank}"
 
         # Move model to device
         self.model = model.to(self.device)
