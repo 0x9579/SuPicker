@@ -87,6 +87,8 @@ class Logger:
                 msg += f" | R: {val_metrics['recall']:.3f}"
             if "f1_score" in val_metrics:
                 msg += f" | F1: {val_metrics['f1_score']:.3f}"
+            if "max_score" in val_metrics:
+                msg += f" | Max_Score: {val_metrics['max_score']:.3f}"
 
         if lr is not None:
             msg += f" | LR: {lr:.2e}"

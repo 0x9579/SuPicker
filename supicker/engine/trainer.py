@@ -248,6 +248,7 @@ class Trainer:
         self.model.eval()
         total_loss = 0.0
         num_batches = 0
+        global_max_score = 0.0
 
         metric_aggregator = MetricAggregator(distance_threshold) if compute_metrics else None
 
@@ -269,6 +270,11 @@ class Trainer:
 
                 total_loss += loss.item()
                 num_batches += 1
+                
+                # Track max score across this batch
+                if "heatmap" in outputs:
+                    batch_max = outputs["heatmap"].max().item()
+                    global_max_score = max(global_max_score, batch_max)
 
                 # Compute detection metrics if requested
                 if compute_metrics and metric_aggregator is not None:
@@ -293,6 +299,7 @@ class Trainer:
                 "recall": metrics.recall,
                 "f1_score": metrics.f1_score,
                 "avg_distance": metrics.avg_distance,
+                "max_score": global_max_score,
             }
             if metrics.ap is not None:
                 metrics_dict["ap"] = metrics.ap
