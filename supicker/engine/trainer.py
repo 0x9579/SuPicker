@@ -430,8 +430,13 @@ class Trainer:
 
                 # Validation
                 val_loss = None
+                val_metrics = None
                 if val_loader is not None and (epoch + 1) % self.config.val_interval == 0:
-                    val_loss = self.validate(val_loader)
+                    result = self.validate(val_loader, compute_metrics=True)
+                    if isinstance(result, tuple):
+                        val_loss, val_metrics = result
+                    else:
+                        val_loss = result
 
                 # Update scheduler
                 if self.scheduler is not None and epoch >= self.config.warmup_epochs:
@@ -446,6 +451,7 @@ class Trainer:
                         epoch=epoch + 1,
                         train_loss=train_loss,
                         val_loss=val_loss,
+                        val_metrics=val_metrics,
                         lr=lr,
                     )
 

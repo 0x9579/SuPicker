@@ -80,6 +80,14 @@ class Logger:
         if val_loss is not None:
             msg += f" | Val Loss: {val_loss:.4f}"
 
+        if val_metrics:
+            if "precision" in val_metrics:
+                msg += f" | P: {val_metrics['precision']:.3f}"
+            if "recall" in val_metrics:
+                msg += f" | R: {val_metrics['recall']:.3f}"
+            if "f1_score" in val_metrics:
+                msg += f" | F1: {val_metrics['f1_score']:.3f}"
+
         if lr is not None:
             msg += f" | LR: {lr:.2e}"
 
