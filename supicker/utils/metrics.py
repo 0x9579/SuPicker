@@ -210,7 +210,7 @@ def compute_average_precision(
 class MetricAggregator:
     """Aggregates detection metrics across multiple images."""
 
-    def __init__(self, distance_threshold: float = 10.0):
+    def __init__(self, distance_threshold: float = 20.0):
         """Initialize aggregator.
 
         Args:
