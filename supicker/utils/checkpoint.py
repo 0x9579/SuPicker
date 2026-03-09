@@ -2,6 +2,7 @@ from pathlib import Path
 from typing import Optional, Union
 import torch
 import torch.nn as nn
+from datetime import datetime
 
 
 class CheckpointManager:
@@ -59,8 +60,9 @@ class CheckpointManager:
         if scheduler is not None:
             checkpoint["scheduler_state_dict"] = scheduler.state_dict()
 
-        # Save regular checkpoint
-        filename = f"epoch_{epoch:03d}_loss_{loss:.4f}.pt"
+        # Save regular checkpoint with timestamp
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"epoch_{epoch:03d}_loss_{loss:.4f}_{timestamp}.pt"
         path = self.checkpoint_dir / filename
         torch.save(checkpoint, path)
 
@@ -129,8 +131,8 @@ class CheckpointManager:
         if not checkpoints:
             return None
 
-        # Sort by epoch number (extracted from filename)
-        checkpoints.sort(key=lambda p: int(p.stem.split("_")[1]))
+        # Sort by modification time to get the truly latest file
+        checkpoints.sort(key=lambda p: p.stat().st_mtime)
         return str(checkpoints[-1])
 
     def _cleanup_old_checkpoints(self) -> None:
@@ -142,8 +144,9 @@ class CheckpointManager:
         if len(checkpoints) <= self.max_checkpoints:
             return
 
-        # Sort by epoch number
-        checkpoints.sort(key=lambda p: int(p.stem.split("_")[1]))
+        # Sort by modification time to keep the most recent checkpoints
+        # regardless of epoch number (useful when restarting training)
+        checkpoints.sort(key=lambda p: p.stat().st_mtime)
 
         # Remove oldest checkpoints
         for ckpt in checkpoints[: -self.max_checkpoints]:
