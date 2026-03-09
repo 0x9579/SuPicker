@@ -53,44 +53,60 @@ class Predictor:
         with torch.no_grad():
             outputs = self.model(image)
 
-        # Extract peaks from heatmap
+        return self.decode_outputs(
+            outputs,
+            score_threshold=self.config.score_threshold,
+            nms_enabled=self.config.nms_enabled,
+            nms_radius=self.config.nms_radius,
+            output_stride=self.output_stride,
+        )
+
+    @staticmethod
+    def decode_outputs(
+        outputs: dict[str, torch.Tensor],
+        score_threshold: float = 0.3,
+        nms_enabled: bool = True,
+        nms_radius: float = 20.0,
+        output_stride: int = 4,
+        min_distance: int = 1,
+    ) -> list[dict]:
+        """Decode model outputs into particle predictions."""
         heatmap = outputs["heatmap"]
-        size = outputs["size"]
-        offset = outputs["offset"]
+        size = outputs.get("size")
+        offset = outputs.get("offset")
 
-        particles = self.extract_peaks(heatmap)
+        particles = Predictor.extract_peaks_from_heatmap(
+            heatmap,
+            score_threshold=score_threshold,
+            min_distance=min_distance,
+        )
 
-        # Add size and offset information
         for p in particles:
+            batch_idx = int(p.get("batch_idx", 0))
             x_out, y_out = int(p["x"]), int(p["y"])
             h_out, w_out = heatmap.shape[2], heatmap.shape[3]
 
-            # Clamp to valid range
             x_out = max(0, min(x_out, w_out - 1))
             y_out = max(0, min(y_out, h_out - 1))
 
-            # Get size predictions
             if size is not None:
-                p["width"] = float(size[0, 0, y_out, x_out])
-                p["height"] = float(size[0, 1, y_out, x_out])
+                p["width"] = float(size[batch_idx, 0, y_out, x_out])
+                p["height"] = float(size[batch_idx, 1, y_out, x_out])
             else:
                 p["width"] = 64.0
                 p["height"] = 64.0
 
-            # Get offset and apply to coordinates
             if offset is not None:
-                offset_x = float(offset[0, 0, y_out, x_out])
-                offset_y = float(offset[0, 1, y_out, x_out])
+                offset_x = float(offset[batch_idx, 0, y_out, x_out])
+                offset_y = float(offset[batch_idx, 1, y_out, x_out])
             else:
                 offset_x, offset_y = 0.0, 0.0
 
-            # Convert to original image coordinates
-            p["x"] = (p["x"] + offset_x) * self.output_stride
-            p["y"] = (p["y"] + offset_y) * self.output_stride
+            p["x"] = (p["x"] + offset_x) * output_stride
+            p["y"] = (p["y"] + offset_y) * output_stride
 
-        # Apply NMS
-        if self.config.nms_enabled:
-            particles = self.apply_nms(particles)
+        if nms_enabled:
+            particles = Predictor.apply_nms_to_particles(particles, radius=nms_radius)
 
         return particles
 
@@ -108,6 +124,18 @@ class Predictor:
         Returns:
             List of peak dictionaries with x, y, score, class_id
         """
+        return self.extract_peaks_from_heatmap(
+            heatmap,
+            score_threshold=self.config.score_threshold,
+            min_distance=min_distance,
+        )
+
+    @staticmethod
+    def extract_peaks_from_heatmap(
+        heatmap: torch.Tensor,
+        score_threshold: float,
+        min_distance: int = 1,
+    ) -> list[dict]:
         batch_size, num_classes, h, w = heatmap.shape
         particles = []
 
@@ -123,7 +151,7 @@ class Predictor:
         )
 
         # Keep only local maxima above threshold
-        keep = (heatmap == hmax) & (heatmap >= self.config.score_threshold)
+        keep = (heatmap == hmax) & (heatmap >= score_threshold)
 
         for b in range(batch_size):
             for c in range(num_classes):
@@ -137,6 +165,7 @@ class Predictor:
                         "y": y,
                         "score": score,
                         "class_id": c,
+                        "batch_idx": b,
                     })
 
         # Sort by score descending
@@ -156,10 +185,16 @@ class Predictor:
         Returns:
             Filtered list of particles
         """
+        return self.apply_nms_to_particles(particles, radius=self.config.nms_radius)
+
+    @staticmethod
+    def apply_nms_to_particles(
+        particles: list[dict],
+        radius: float,
+    ) -> list[dict]:
         if not particles:
             return []
 
-        radius = self.config.nms_radius
         radius_sq = radius ** 2
 
         # Sort by score descending
@@ -180,6 +215,10 @@ class Predictor:
                     continue
 
                 other = particles[j]
+                if p.get("batch_idx", 0) != other.get("batch_idx", 0):
+                    continue
+                if p.get("class_id", 0) != other.get("class_id", 0):
+                    continue
                 dist_sq = (p["x"] - other["x"]) ** 2 + (p["y"] - other["y"]) ** 2
 
                 if dist_sq < radius_sq:

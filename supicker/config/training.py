@@ -34,6 +34,9 @@ class TrainingConfig(Config):
     log_dir: str = "./logs"
     save_interval: int = 10
     val_interval: int = 1
+    val_score_threshold: float = 0.1
+    val_distance_threshold: float = 20.0
+    val_nms_radius: float = 20.0
     loss: LossConfig = field(default_factory=LossConfig)
     # Distributed training settings
     distributed: bool = False

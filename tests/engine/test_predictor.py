@@ -57,6 +57,19 @@ def test_predictor_nms():
     assert filtered[0]["score"] == 0.9
 
 
+def test_predictor_nms_keeps_different_classes():
+    from supicker.engine.predictor import Predictor
+
+    particles = [
+        {"x": 10.0, "y": 10.0, "score": 0.9, "class_id": 0, "batch_idx": 0},
+        {"x": 11.0, "y": 11.0, "score": 0.8, "class_id": 1, "batch_idx": 0},
+    ]
+
+    filtered = Predictor.apply_nms_to_particles(particles, radius=5.0)
+
+    assert len(filtered) == 2
+
+
 def test_predictor_predict():
     from supicker.engine.predictor import Predictor
     from supicker.models import Detector

@@ -54,3 +54,20 @@ def test_logger_console_output(capsys):
         captured = capsys.readouterr()
         assert "Epoch" in captured.out
         assert "0.5" in captured.out or "0.50" in captured.out
+
+
+def test_format_validation_threshold_logging():
+    from supicker.config import TrainingConfig
+    from scripts.train import format_validation_thresholds
+
+    config = TrainingConfig(
+        val_score_threshold=0.1,
+        val_distance_threshold=20.0,
+        val_nms_radius=20.0,
+    )
+
+    output = format_validation_thresholds(config)
+
+    assert "Val score threshold: 0.1" in output
+    assert "Val distance threshold: 20.0" in output
+    assert "Val NMS radius: 20.0" in output

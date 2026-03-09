@@ -72,6 +72,24 @@ def parse_args():
     )
     parser.add_argument("--weight-decay", type=float, default=0.01, help="Weight decay")
     parser.add_argument("--warmup-epochs", type=int, default=5, help="Warmup epochs")
+    parser.add_argument(
+        "--val-score-threshold",
+        type=float,
+        default=0.1,
+        help="Validation detection score threshold",
+    )
+    parser.add_argument(
+        "--val-distance-threshold",
+        type=float,
+        default=20.0,
+        help="Validation match distance threshold in pixels",
+    )
+    parser.add_argument(
+        "--val-nms-radius",
+        type=float,
+        default=20.0,
+        help="Validation NMS radius in pixels",
+    )
 
     # Augmentation arguments
     parser.add_argument("--no-augmentation", action="store_true", help="Disable augmentation")
@@ -120,6 +138,14 @@ def parse_args():
     return parser.parse_args()
 
 
+def format_validation_thresholds(config: TrainingConfig) -> str:
+    return (
+        f"  Val score threshold: {config.val_score_threshold}\n"
+        f"  Val distance threshold: {config.val_distance_threshold}\n"
+        f"  Val NMS radius: {config.val_nms_radius}"
+    )
+
+
 def main():
     args = parse_args()
 
@@ -150,6 +176,9 @@ def main():
         checkpoint_dir=args.checkpoint_dir,
         log_dir=args.log_dir,
         save_interval=args.save_interval,
+        val_score_threshold=args.val_score_threshold,
+        val_distance_threshold=args.val_distance_threshold,
+        val_nms_radius=args.val_nms_radius,
         distributed=args.distributed,
         dist_backend=args.dist_backend,
         sync_bn=not args.no_sync_bn,
@@ -264,6 +293,7 @@ def main():
         print(f"  Device: {args.device}")
         print(f"  Batch size: {args.batch_size}")
         print(f"  Learning rate: {args.lr}")
+        print(format_validation_thresholds(training_config))
         if args.distributed:
             print(f"  Distributed: True (backend={args.dist_backend})")
         print()

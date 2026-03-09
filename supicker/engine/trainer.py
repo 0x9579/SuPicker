@@ -231,7 +231,7 @@ class Trainer:
         self,
         val_loader: Union[DataLoader, list[dict[str, torch.Tensor]]],
         compute_metrics: bool = False,
-        distance_threshold: float = 10.0,
+        distance_threshold: Optional[float] = None,
     ) -> Union[float, tuple[float, Optional[dict]]]:
         """Run validation.
 
@@ -250,7 +250,14 @@ class Trainer:
         num_batches = 0
         global_max_score = 0.0
 
-        metric_aggregator = MetricAggregator(distance_threshold) if compute_metrics else None
+        effective_distance_threshold = (
+            distance_threshold
+            if distance_threshold is not None
+            else self.config.val_distance_threshold
+        )
+        metric_aggregator = (
+            MetricAggregator(effective_distance_threshold) if compute_metrics else None
+        )
 
         with torch.no_grad():
             for batch in val_loader:
@@ -278,7 +285,11 @@ class Trainer:
 
                 # Compute detection metrics if requested
                 if compute_metrics and metric_aggregator is not None:
-                    predictions = self._extract_predictions(outputs)
+                    predictions = self._extract_predictions(
+                        outputs,
+                        score_threshold=self.config.val_score_threshold,
+                        nms_radius=self.config.val_nms_radius,
+                    )
                     ground_truth = batch.get("particles", [])
                     # Handle batched particles (list of lists)
                     if ground_truth and isinstance(ground_truth[0], list):
@@ -312,6 +323,7 @@ class Trainer:
         outputs: dict[str, torch.Tensor],
         score_threshold: float = 0.3,
         max_per_image: int = 500,
+        nms_radius: float = 20.0,
     ) -> list[dict]:
         """Extract particle predictions from model outputs.
 
@@ -323,66 +335,33 @@ class Trainer:
         Returns:
             List of particle dictionaries with x, y, score keys
         """
-        import torch.nn.functional as F
+        from supicker.engine.predictor import Predictor
 
-        heatmap = outputs["heatmap"]
-        batch_size, num_classes, h, w = heatmap.shape
+        particles = Predictor.decode_outputs(
+            outputs,
+            score_threshold=score_threshold,
+            nms_enabled=nms_radius > 0,
+            nms_radius=nms_radius,
+        )
 
-        # Find local maxima using max pooling
-        hmax = F.max_pool2d(heatmap, kernel_size=3, stride=1, padding=1)
-        keep = (heatmap == hmax).float()
-        heatmap = heatmap * keep  # Zero out non-maxima
+        if len(particles) <= max_per_image:
+            return particles
 
-        particles = []
-        output_stride = 4  # Default output stride
+        per_batch: dict[int, list[dict]] = {}
+        for particle in particles:
+            batch_idx = int(particle.get("batch_idx", 0))
+            per_batch.setdefault(batch_idx, []).append(particle)
 
-        for b in range(batch_size):
-            # Flatten heatmap for this image: [num_classes * h * w]
-            hm_flat = heatmap[b].view(-1)
-            
-            # Get top K to prevent Hungarian matching from hanging on thousands of false positives
-            K = min(max_per_image, hm_flat.shape[0])
-            topk_scores, topk_inds = torch.topk(hm_flat, K)
-            
-            # Filter by score_threshold
-            valid_mask = topk_scores >= score_threshold
-            topk_scores = topk_scores[valid_mask]
-            topk_inds = topk_inds[valid_mask]
-            
-            if len(topk_scores) == 0:
-                continue
-                
-            # Convert flat indices back to class, y, x
-            classes = topk_inds // (h * w)
-            topk_inds = topk_inds % (h * w)
-            ys = topk_inds // w
-            xs = topk_inds % w
+        limited_particles = []
+        for batch_idx in sorted(per_batch):
+            batch_particles = sorted(
+                per_batch[batch_idx],
+                key=lambda p: p.get("score", 0.0),
+                reverse=True,
+            )[:max_per_image]
+            limited_particles.extend(batch_particles)
 
-            for idx in range(len(topk_scores)):
-                score = float(topk_scores[idx])
-                c = int(classes[idx])
-                y = int(ys[idx])
-                x = int(xs[idx])
-
-                # Get offset if available
-                offset_x, offset_y = 0.0, 0.0
-                if "offset" in outputs and outputs["offset"] is not None:
-                    offset_x = float(outputs["offset"][b, 0, y, x])
-                    offset_y = float(outputs["offset"][b, 1, y, x])
-
-                # Convert to image coordinates
-                img_x = (x + offset_x) * output_stride
-                img_y = (y + offset_y) * output_stride
-
-                particles.append({
-                    "x": img_x,
-                    "y": img_y,
-                    "score": score,
-                    "class_id": c,
-                    "batch_idx": b,
-                })
-
-        return particles
+        return limited_particles
 
     def _split_predictions_by_batch(
         self,
