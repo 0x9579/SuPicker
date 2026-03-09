@@ -61,6 +61,7 @@ def test_format_validation_threshold_logging():
     from scripts.train import format_validation_thresholds
 
     config = TrainingConfig(
+        val_interval=5,
         val_score_threshold=0.1,
         val_distance_threshold=20.0,
         val_nms_radius=20.0,
@@ -68,6 +69,7 @@ def test_format_validation_threshold_logging():
 
     output = format_validation_thresholds(config)
 
+    assert "Val interval: 5" in output
     assert "Val score threshold: 0.1" in output
     assert "Val distance threshold: 20.0" in output
     assert "Val NMS radius: 20.0" in output

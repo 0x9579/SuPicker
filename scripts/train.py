@@ -90,6 +90,12 @@ def parse_args():
         default=20.0,
         help="Validation NMS radius in pixels",
     )
+    parser.add_argument(
+        "--val-interval",
+        type=int,
+        default=1,
+        help="Run validation every N epochs",
+    )
 
     # Augmentation arguments
     parser.add_argument("--no-augmentation", action="store_true", help="Disable augmentation")
@@ -140,6 +146,7 @@ def parse_args():
 
 def format_validation_thresholds(config: TrainingConfig) -> str:
     return (
+        f"  Val interval: {config.val_interval}\n"
         f"  Val score threshold: {config.val_score_threshold}\n"
         f"  Val distance threshold: {config.val_distance_threshold}\n"
         f"  Val NMS radius: {config.val_nms_radius}"
@@ -176,6 +183,7 @@ def main():
         checkpoint_dir=args.checkpoint_dir,
         log_dir=args.log_dir,
         save_interval=args.save_interval,
+        val_interval=args.val_interval,
         val_score_threshold=args.val_score_threshold,
         val_distance_threshold=args.val_distance_threshold,
         val_nms_radius=args.val_nms_radius,
