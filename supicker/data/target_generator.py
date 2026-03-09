@@ -81,11 +81,10 @@ class TargetGenerator:
         x = torch.arange(-left, right, dtype=torch.float32)
         yy, xx = torch.meshgrid(y, x, indexing="ij")
 
-        # Offset from actual center (for sub-pixel accuracy)
-        offset_x = cx - cx_int
-        offset_y = cy - cy_int
-
-        gaussian = torch.exp(-((xx - offset_x) ** 2 + (yy - offset_y) ** 2) / (2 * sigma ** 2))
+        # In CenterNet, the peak must be EXACTLY 1.0 at the integer center. 
+        # So we omit the sub-pixel offsets (cx-cx_int) from the Gaussian kernel.
+        # The offset regression head will handle the precise sub-pixel coordinates.
+        gaussian = torch.exp(-(xx ** 2 + yy ** 2) / (2 * sigma ** 2))
 
         # Apply to heatmap (take max with existing values)
         y_slice = slice(cy_int - top, cy_int + bottom)
