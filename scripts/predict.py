@@ -15,6 +15,7 @@ from supicker.config import (
     ConvNeXtVariant,
     InferenceConfig,
 )
+from supicker.data.transforms import Normalize
 from supicker.models import Detector
 from supicker.engine import Predictor
 from supicker.utils import export_particles
@@ -97,7 +98,7 @@ def load_image(path: Path) -> torch.Tensor:
     # Convert to float32
     image = image.astype(np.float32)
 
-    # Normalize
+    # Match dataset loading
     if image.max() > 1.0:
         image = (image - image.min()) / (image.max() - image.min() + 1e-8)
 
@@ -105,7 +106,9 @@ def load_image(path: Path) -> torch.Tensor:
     if image.ndim == 2:
         image = image[np.newaxis, ...]
 
-    return torch.from_numpy(image)
+    tensor = torch.from_numpy(image)
+    tensor, _ = Normalize(p=1.0).apply(tensor, [])
+    return tensor
 
 
 def main():
