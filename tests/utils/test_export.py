@@ -58,5 +58,12 @@ def test_export_to_star():
         with open(f.name, "r") as rf:
             content = rf.read()
 
+        assert content.startswith("data_particles\n\nloop_\n")
+        assert "_rlnMicrographName #1" in content
+        assert "_rlnCoordinateX #2" in content
+        assert "_rlnCoordinateY #3" in content
+        assert "_rlnClassNumber #4" in content
+        assert "_rlnAutopickFigureOfMerit #5" in content
+        assert "_rlnParticleBoxSize #6" in content
         assert "_rlnCoordinateX" in content
         assert "100.00" in content

@@ -30,3 +30,48 @@ def test_load_image_skips_zscore_for_constant_input(tmp_path):
 
     assert tensor.shape == (1, 2, 2)
     assert torch.allclose(tensor, torch.zeros_like(tensor))
+
+
+def test_predict_parser_accepts_merge_output(monkeypatch):
+    from scripts import predict
+
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "predict.py",
+            "--input", "images",
+            "--checkpoint", "model.pt",
+            "--merge-output", "merged.star",
+        ],
+    )
+
+    args = predict.parse_args()
+
+    assert args.merge_output == "merged.star"
+
+
+def test_export_merged_particles_writes_single_star(tmp_path):
+    from scripts.predict import export_merged_particles
+
+    merged_path = tmp_path / "merged.star"
+    particles_by_image = {
+        "a.mrc": [{"x": 1.0, "y": 2.0, "score": 0.9, "class_id": 0}],
+        "b.mrc": [{"x": 3.0, "y": 4.0, "score": 0.8, "class_id": 0}],
+    }
+
+    export_merged_particles(particles_by_image, merged_path, format="star")
+
+    content = merged_path.read_text()
+    assert "a.mrc 1.00 2.00" in content
+    assert "b.mrc 3.00 4.00" in content
+
+
+def test_export_merged_particles_creates_parent_directory(tmp_path):
+    from scripts.predict import export_merged_particles
+
+    merged_path = tmp_path / "nested" / "merged.star"
+    particles_by_image = {"a.mrc": [{"x": 1.0, "y": 2.0, "score": 0.9, "class_id": 0}]}
+
+    export_merged_particles(particles_by_image, merged_path, format="star")
+
+    assert merged_path.exists()

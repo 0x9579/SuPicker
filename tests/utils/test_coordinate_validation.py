@@ -1,6 +1,8 @@
 from pathlib import Path
 import subprocess
 import sys
+import json
+import csv
 
 import numpy as np
 import pytest
@@ -111,6 +113,174 @@ cli_image.tiff 5.0 6.0
     assert result.returncode == 0
     assert output_path.exists()
     assert "particle_count" in result.stdout
+
+
+def test_validate_coords_cli_directory_mode_generates_multiple_overlays(tmp_path: Path):
+    image_dir = tmp_path / "images"
+    star_dir = tmp_path / "stars"
+    output_dir = tmp_path / "overlays"
+    image_dir.mkdir()
+    star_dir.mkdir()
+
+    for stem in ["a", "b"]:
+        tifffile.imwrite(image_dir / f"{stem}.tiff", np.zeros((16, 16), dtype=np.float32))
+        (star_dir / f"{stem}.star").write_text(
+            f"""data_particles
+
+loop_
+_rlnMicrographName #1
+_rlnCoordinateX #2
+_rlnCoordinateY #3
+{stem}.tiff 5.0 6.0
+"""
+        )
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "scripts/validate_coords.py",
+            "--image-dir",
+            str(image_dir),
+            "--star-dir",
+            str(star_dir),
+            "--output-dir",
+            str(output_dir),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0
+    assert (output_dir / "a.tiff.png").exists()
+    assert (output_dir / "b.tiff.png").exists()
+    assert "processed_files: 2" in result.stdout
+
+
+def test_validate_coords_cli_directory_mode_rejects_micrograph_name(tmp_path: Path):
+    image_dir = tmp_path / "images"
+    star_dir = tmp_path / "stars"
+    output_dir = tmp_path / "overlays"
+    image_dir.mkdir()
+    star_dir.mkdir()
+
+    tifffile.imwrite(image_dir / "a.tiff", np.zeros((16, 16), dtype=np.float32))
+    (star_dir / "a.star").write_text(
+        """data_particles
+
+loop_
+_rlnMicrographName #1
+_rlnCoordinateX #2
+_rlnCoordinateY #3
+a.tiff 5.0 6.0
+"""
+    )
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "scripts/validate_coords.py",
+            "--image-dir", str(image_dir),
+            "--star-dir", str(star_dir),
+            "--output-dir", str(output_dir),
+            "--micrograph-name", "forced_name.mrc",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode != 0
+    assert "micrograph-name" in result.stderr
+
+
+def test_validate_coords_cli_directory_mode_writes_json_summary(tmp_path: Path):
+    image_dir = tmp_path / "images"
+    star_dir = tmp_path / "stars"
+    output_dir = tmp_path / "overlays"
+    summary_path = tmp_path / "summary.json"
+    image_dir.mkdir()
+    star_dir.mkdir()
+
+    tifffile.imwrite(image_dir / "a.tiff", np.zeros((16, 16), dtype=np.float32))
+    (star_dir / "a.star").write_text(
+        """data_particles
+
+loop_
+_rlnMicrographName #1
+_rlnCoordinateX #2
+_rlnCoordinateY #3
+a.tiff 5.0 6.0
+"""
+    )
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "scripts/validate_coords.py",
+            "--image-dir",
+            str(image_dir),
+            "--star-dir",
+            str(star_dir),
+            "--output-dir",
+            str(output_dir),
+            "--summary-output",
+            str(summary_path),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0
+    data = json.loads(summary_path.read_text())
+    assert data["processed_files"] == 1
+    assert data["files"][0]["resolved_micrograph_name"] == "a.tiff"
+
+
+def test_validate_coords_cli_directory_mode_writes_csv_summary(tmp_path: Path):
+    image_dir = tmp_path / "images"
+    star_dir = tmp_path / "stars"
+    output_dir = tmp_path / "overlays"
+    summary_path = tmp_path / "summary.csv"
+    image_dir.mkdir()
+    star_dir.mkdir()
+
+    tifffile.imwrite(image_dir / "a.tiff", np.zeros((16, 16), dtype=np.float32))
+    (star_dir / "a.star").write_text(
+        """data_particles
+
+loop_
+_rlnMicrographName #1
+_rlnCoordinateX #2
+_rlnCoordinateY #3
+a.tiff 5.0 6.0
+"""
+    )
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "scripts/validate_coords.py",
+            "--image-dir",
+            str(image_dir),
+            "--star-dir",
+            str(star_dir),
+            "--output-dir",
+            str(output_dir),
+            "--summary-output",
+            str(summary_path),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0
+    with open(summary_path, newline="") as f:
+        rows = list(csv.DictReader(f))
+    assert len(rows) == 1
+    assert rows[0]["resolved_micrograph_name"] == "a.tiff"
 
 
 def test_generate_coordinate_overlay_requires_matching_star_entry(tmp_path: Path):

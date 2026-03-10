@@ -107,14 +107,14 @@ def write_star_file(
     output_path = Path(output_path)
 
     with open(output_path, "w") as f:
-        f.write("data_\n\n")
+        f.write("data_particles\n\n")
         f.write("loop_\n")
-        f.write("_rlnMicrographName\n")
-        f.write("_rlnCoordinateX\n")
-        f.write("_rlnCoordinateY\n")
-        f.write("_rlnClassNumber\n")
-        f.write("_rlnAutopickFigureOfMerit\n")
-        f.write("_rlnParticleBoxSize\n")
+        f.write("_rlnMicrographName #1\n")
+        f.write("_rlnCoordinateX #2\n")
+        f.write("_rlnCoordinateY #3\n")
+        f.write("_rlnClassNumber #4\n")
+        f.write("_rlnAutopickFigureOfMerit #5\n")
+        f.write("_rlnParticleBoxSize #6\n")
 
         for p in particles:
             mic = p.get("micrograph", micrograph_name)

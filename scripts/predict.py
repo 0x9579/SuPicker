@@ -73,6 +73,12 @@ def parse_args():
         choices=["star", "json", "csv"],
         help="Output format",
     )
+    parser.add_argument(
+        "--merge-output",
+        type=str,
+        default=None,
+        help="Optional merged output file for all predictions",
+    )
 
     # Other arguments
     parser.add_argument(
@@ -109,6 +115,27 @@ def load_image(path: Path) -> torch.Tensor:
     tensor = torch.from_numpy(image)
     tensor, _ = Normalize(p=1.0).apply(tensor, [])
     return tensor
+
+
+def export_merged_particles(
+    particles_by_image: dict[str, list[dict]],
+    output_path: Path,
+    format: str,
+) -> None:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    merged_particles = []
+    for micrograph_name, particles in particles_by_image.items():
+        for particle in particles:
+            merged_particle = dict(particle)
+            merged_particle["micrograph"] = micrograph_name
+            merged_particles.append(merged_particle)
+
+    export_particles(
+        merged_particles,
+        output_path,
+        format=format,
+        micrograph_name="",
+    )
 
 
 def main():
@@ -168,6 +195,7 @@ def main():
 
     # Process each image
     total_particles = 0
+    particles_by_image = {}
     for img_path in image_paths:
         print(f"Processing {img_path.name}...")
 
@@ -176,6 +204,7 @@ def main():
 
         # Run prediction
         particles = predictor.predict(image)
+        particles_by_image[img_path.name] = particles
 
         print(f"  Found {len(particles)} particles")
         total_particles += len(particles)
@@ -187,6 +216,13 @@ def main():
             output_path,
             format=args.format,
             micrograph_name=img_path.name,
+        )
+
+    if args.merge_output:
+        export_merged_particles(
+            particles_by_image,
+            Path(args.merge_output),
+            format=args.format,
         )
 
     print(f"\nProcessed {len(image_paths)} images")
