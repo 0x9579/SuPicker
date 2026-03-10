@@ -114,8 +114,8 @@ python scripts/predict.py \
 
 | 参数 | 默认值 | 说明 |
 |------|--------|------|
-| `--score-threshold` | `0.3` | 最小检测置信度阈值 |
-| `--nms-radius` | `10` | NMS 抑制半径（像素） |
+| `--threshold` | `0.3` | 最小检测置信度阈值 |
+| `--nms-radius` | `20` | NMS 抑制半径（像素） |
 | `--format` | `star` | 输出格式：star、json、csv |
 
 ## Python API
@@ -242,9 +242,11 @@ _rlnAutopickFigureOfMerit
 
 ```json
 {
-  "micrograph_001.tiff": [
-    {"x": 100.5, "y": 200.3, "score": 0.95, "width": 64, "height": 64},
-    {"x": 150.2, "y": 300.1, "score": 0.88, "width": 64, "height": 64}
+  "micrograph": "micrograph_001.tiff",
+  "num_particles": 2,
+  "particles": [
+    {"x": 100.5, "y": 200.3, "score": 0.95, "class_id": 0, "width": 64, "height": 64},
+    {"x": 150.2, "y": 300.1, "score": 0.88, "class_id": 0, "width": 64, "height": 64}
   ]
 }
 ```
@@ -252,9 +254,9 @@ _rlnAutopickFigureOfMerit
 ### CSV 格式
 
 ```csv
-micrograph,x,y,score,width,height
-micrograph_001.tiff,100.5,200.3,0.95,64,64
-micrograph_001.tiff,150.2,300.1,0.88,64,64
+micrograph,x,y,score,class_id,width,height
+micrograph_001.tiff,100.5,200.3,0.95,0,64,64
+micrograph_001.tiff,150.2,300.1,0.88,0,64,64
 ```
 
 ## 数据工具
@@ -289,13 +291,15 @@ supicker/
 ├── losses/          # 损失函数
 ├── models/          # 模型架构
 │   ├── backbone/    # ConvNeXt 骨干网络
-│   ├── fpn/         # 特征金字塔网络
+│   ├── neck/        # 特征金字塔网络
 │   └── head/        # CenterNet 检测头
 └── utils/           # 工具类（日志、导出、评估指标）
 scripts/
 ├── train.py         # 训练脚本
 ├── predict.py       # 推理脚本
-└── star_tool.py     # STAR 文件检查与拆分工具
+├── star_tool.py     # STAR 文件检查与拆分工具
+├── validate_coords.py # 坐标叠加校验工具
+└── scan_thresholds.py # 验证阈值扫描工具
 ```
 
 ## 训练建议

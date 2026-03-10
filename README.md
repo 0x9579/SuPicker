@@ -14,7 +14,7 @@ A deep learning framework for particle picking in Cryo-EM micrographs using Cent
 - **Distributed Training**: Multi-GPU support via PyTorch DistributedDataParallel
 - **Pretrained Weights**: Optional ImageNet pretrained backbone weights
 - **Evaluation Metrics**: Precision, Recall, F1, and Average Precision computation
-- **Training Metrics Logging**: Real-time display of precision and recall in training logs
+- **Training Metrics Logging**: Real-time display of precision, recall, F1, and max score in training logs
 - **Auto-save on Interrupt**: Safely save training progress when gracefully exiting (Ctrl+C)
 
 ## Installation
@@ -114,8 +114,8 @@ python scripts/predict.py \
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `--score-threshold` | `0.3` | Minimum detection score |
-| `--nms-radius` | `10` | NMS suppression radius (pixels) |
+| `--threshold` | `0.3` | Minimum detection score |
+| `--nms-radius` | `20` | NMS suppression radius (pixels) |
 | `--format` | `star` | Output format: star, json, csv |
 
 ## Python API
@@ -242,9 +242,11 @@ _rlnAutopickFigureOfMerit
 
 ```json
 {
-  "micrograph_001.tiff": [
-    {"x": 100.5, "y": 200.3, "score": 0.95, "width": 64, "height": 64},
-    {"x": 150.2, "y": 300.1, "score": 0.88, "width": 64, "height": 64}
+  "micrograph": "micrograph_001.tiff",
+  "num_particles": 2,
+  "particles": [
+    {"x": 100.5, "y": 200.3, "score": 0.95, "class_id": 0, "width": 64, "height": 64},
+    {"x": 150.2, "y": 300.1, "score": 0.88, "class_id": 0, "width": 64, "height": 64}
   ]
 }
 ```
@@ -252,9 +254,9 @@ _rlnAutopickFigureOfMerit
 ### CSV Format
 
 ```csv
-micrograph,x,y,score,width,height
-micrograph_001.tiff,100.5,200.3,0.95,64,64
-micrograph_001.tiff,150.2,300.1,0.88,64,64
+micrograph,x,y,score,class_id,width,height
+micrograph_001.tiff,100.5,200.3,0.95,0,64,64
+micrograph_001.tiff,150.2,300.1,0.88,0,64,64
 ```
 
 ## Data Tools
@@ -289,13 +291,15 @@ supicker/
 ├── losses/          # Loss functions
 ├── models/          # Model architectures
 │   ├── backbone/    # ConvNeXt backbone
-│   ├── fpn/         # Feature Pyramid Network
+│   ├── neck/        # Feature Pyramid Network
 │   └── head/        # CenterNet detection head
 └── utils/           # Utilities (logging, export, metrics)
 scripts/
 ├── train.py         # Training script
 ├── predict.py       # Inference script
-└── star_tool.py     # STAR file inspection & splitting
+├── star_tool.py     # STAR file inspection & splitting
+├── validate_coords.py # Coordinate overlay validation tool
+└── scan_thresholds.py # Validation threshold sweep tool
 ```
 
 ## Training Tips
